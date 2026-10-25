@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Último Sobrevivente</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#17251c;color:#fff;font-family:system-ui,-apple-system,Arial;touch-action:none}
+canvas{display:block;width:100vw;height:100vh;background:#6e9858}
+#hud{position:fixed;top:0;left:0;right:0;padding:10px;display:flex;justify-content:space-between;gap:8px;pointer-events:none;text-shadow:0 2px 3px #000;font-weight:800;font-size:13px}
+.pill{background:#101b19c9;border:1px solid #ffffff44;border-radius:12px;padding:8px 10px}
+#message{position:fixed;top:22%;left:50%;transform:translateX(-50%);text-align:center;font-weight:900;font-size:clamp(22px,6vw,40px);text-shadow:0 3px 4px #000;pointer-events:none;width:90%}
+#sub{font-size:14px;font-weight:600;margin-top:6px}
+#controls{position:fixed;bottom:15px;left:15px;right:15px;display:flex;justify-content:space-between;align-items:end;pointer-events:none}
+#stick{width:120px;height:120px;border-radius:50%;background:#10201c77;border:2px solid #ffffff88;position:relative;pointer-events:auto;touch-action:none}
+#nub{position:absolute;width:48px;height:48px;left:34px;top:34px;border-radius:50%;background:#e9f2dfbb;border:2px solid white}
+#shoot{pointer-events:auto;width:82px;height:82px;border-radius:50%;border:3px solid #fff;background:#e85a3dcc;color:white;font-weight:900;font-size:14px;box-shadow:0 3px 10px #0008;touch-action:none}
+#restart{pointer-events:auto;position:fixed;display:none;left:50%;top:62%;transform:translateX(-50%);padding:13px 22px;border:0;border-radius:14px;background:#f6ca55;color:#18251d;font-weight:900;font-size:17px}
+#tip{position:fixed;bottom:145px;left:0;right:0;text-align:center;font-size:12px;color:#fff;text-shadow:0 2px 3px #000;pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="hud"><div class="pill" id="health">❤️ 100</div><div class="pill" id="alive">👥 12 vivos</div><div class="pill" id="ammo">🔫 30</div></div>
+<div id="message">ÚLTIMO SOBREVIVENTE<div id="sub">Sobreviva e seja o último em pé!</div></div>
+<div id="tip">Use o controle para andar • Toque em ATIRAR para disparar</div>
+<div id="controls"><div id="stick"><div id="nub"></div></div><button id="shoot">ATIRAR</button></div>
+<button id="restart">JOGAR NOVAMENTE</button>
+<script>
+(()=>{
+const canvas=document.getElementById('game'),ctx=canvas.getContext('2d');
+let W,H,dpr,player,bots,bullets,trees,rocks,zone,frame,health,ammo,alive,gameOver,won,move={x:0,y:0},lastShot=0;
+function resize(){dpr=Math.min(devicePixelRatio||1,2);W=innerWidth;H=innerHeight;canvas.width=W*dpr;canvas.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}
+addEventListener('resize',resize);resize();
+const rand=(a,b)=>a+Math.random()*(b-a),dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+function reset(){
+ player={x:500,y:500,r:13,speed:2.7,angle:0};
+ bots=Array.from({length:11},(_,i)=>({x:rand(130,870),y:rand(130,870),r:12,hp:60,angle:rand(0,6.28),speed:rand(.7,1.15),cool:rand(20,100),alive:true,skin:['#e8b34b','#d36a52','#9c8ad8','#e5e1ce'][i%4]}));
+ bullets=[];trees=Array.from({length:70},()=>({x:rand(30,970),y:rand(30,970),r:rand(10,20)}));rocks=Array.from({length:35},()=>({x:rand(30,970),y:rand(30,970),r:rand(5,12)}));
+ zone={x:500,y:500,r:470};frame=0;health=100;ammo=30;alive=12;gameOver=false;won=false;
+ document.getElementById('restart').style.display='none';document.getElementById('message').style.display='block';
+ document.getElementById('message').innerHTML='ÚLTIMO SOBREVIVENTE<div id="sub">Sobreviva e seja o último em pé!</div>';
+}
+function shoot(from,angle,owner){if(owner==='player'&&ammo<=0)return;if(owner==='player')ammo--;bullets.push({x:from.x+Math.cos(angle)*18,y:from.y+Math.sin(angle)*18,vx:Math.cos(angle)*6.5,vy:Math.sin(angle)*6.5,owner,life:55,damage:owner==='player'?35:9})}
+function update(){
+ if(gameOver)return;frame++;
+ // Shrinking safe zone
+ if(frame>250&&zone.r>90)zone.r-=.055;
+ player.x+=move.x*player.speed;player.y+=move.y*player.speed;
+ player.x=Math.max(12,Math.min(988,player.x));player.y=Math.max(12,Math.min(988,player.y));
+ // nearest bot points toward player and shoots occasionally
+ for(const b of bots){if(!b.alive)continue;let d=dist(b,player);b.angle=Math.atan2(player.y-b.y,player.x-b.x);
+  if(d>100){b.x+=Math.cos(b.angle)*b.speed;b.y+=Math.sin(b.angle)*b.speed}
+  else if(d<42){b.x-=Math.cos(b.angle)*b.speed*.7;b.y-=Math.sin(b.angle)*b.speed*.7}
+  b.cool--;if(b.cool<=0&&d<340){shoot(b,b.angle,'bot');b.cool=rand(55,110)}
+  if(Math.hypot(b.x-zone.x,b.y-zone.y)>zone.r){b.hp-=.08;if(b.hp<=0)b.alive=false}
+ }
+ if(Math.hypot(player.x-zone.x,player.y-zone.y)>zone.r){health-=.14;if(health<=0)finish(false)}
+ for(const q of bullets){q.x+=q.vx;q.y+=q.vy;q.life--;
+  if(q.owner==='player'){for(const b of bots){if(b.alive&&Math.hypot(q.x-b.x,q.y-b.y)<b.r+4){b.hp-=q.damage;q.life=0;if(b.hp<=0)b.alive=false;break}}}
+  else if(Math.hypot(q.x-player.x,q.y-player.y)<player.r+4){health-=q.damage;q.life=0;if(health<=0)finish(false)}
+ }
+ bullets=bullets.filter(q=>q.life>0&&q.x>=0&&q.x<=1000&&q.y>=0&&q.y<=1000);
+ alive=1+bots.filter(b=>b.alive).length;
+ if(alive===1)finish(true);
+ document.getElementById('health').textContent='❤️ '+Math.max(0,Math.ceil(health));
+ document.getElementById('alive').textContent='👥 '+alive+' vivos';
+ document.getElementById('ammo').textContent='🔫 '+ammo;
+}
+function finish(win){gameOver=true;won=win;document.getElementById('message').innerHTML=win?'🏆 VITÓRIA!<div id="sub">Você é o último sobrevivente!</div>':'💀 FIM DE JOGO<div id="sub">Tente novamente e fique na zona segura.</div>';document.getElementById('restart').style.display='block'}
+function draw(){
+ ctx.clearRect(0,0,W,H);let scale=Math.min(W,H)/600;
+ ctx.save();ctx.translate(W/2,H/2);ctx.scale(scale,scale);ctx.translate(-player.x,-player.y);
+ // map grass
+ ctx.fillStyle='#7ca760';ctx.fillRect(0,0,1000,1000);
+ for(let i=0;i<120;i++){let x=(i*137)%1000,y=(i*239)%1000;ctx.fillStyle=i%2?'#739b55':'#86ae63';ctx.fillRect(x,y,24,4)}
+ // winding road
+ ctx.strokeStyle='#c5b78c';ctx.lineWidth=42;ctx.beginPath();ctx.moveTo(0,300);ctx.bezierCurveTo(260,230,360,500,620,420);ctx.bezierCurveTo(780,370,820,170,1000,220);ctx.stroke();
+ ctx.strokeStyle='#ded1a5';ctx.lineWidth=2;ctx.setLineDash([12,12]);ctx.stroke();ctx.setLineDash([]);
+ for(const t of trees){ctx.fillStyle='#315d38';ctx.beginPath();ctx.arc(t.x+3,t.y+4,t.r,0,7);ctx.fill();ctx.fillStyle='#397a42';ctx.beginPath();ctx.arc(t.x,t.y,t.r,0,7);ctx.fill();ctx.fillStyle='#5b9850';ctx.beginPath();ctx.arc(t.x-4,t.y-5,t.r*.55,0,7);ctx.fill()}
+ for(const r of rocks){ctx.fillStyle='#777e69';ctx.beginPath();ctx.ellipse(r.x,r.y,r.r,r.r*.7,0,0,7);ctx.fill()}
+ // zone outside darkened
+ ctx.fillStyle='#223e5570';ctx.beginPath();ctx.rect(0,0,1000,1000);ctx.arc(zone.x,zone.y,zone.r,0,Math.PI*2,true);ctx.fill('evenodd');
+ ctx.strokeStyle='#a9e9ff';ctx.lineWidth=4;ctx.beginPath();ctx.arc(zone.x,zone.y,zone.r,0,7);ctx.stroke();
+ // bots
+ for(const b of bots){if(!b.alive)continue;drawPerson(b,b.skin,false)}
+ // bullets
+ for(const q of bullets){ctx.fillStyle=q.owner==='player'?'#fff18a':'#ff6b4a';ctx.beginPath();ctx.arc(q.x,q.y,3,0,7);ctx.fill()}
+ drawPerson(player,'#42d9e8',true);
+ ctx.restore();
+}
+function drawPerson(p,color,isPlayer){ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.angle||0);ctx.fillStyle='#17251dcc';ctx.beginPath();ctx.ellipse(1,5,p.r+2,p.r*.8,0,0,7);ctx.fill();ctx.fillStyle=color;ctx.beginPath();ctx.arc(0,0,p.r,0,7);ctx.fill();ctx.fillStyle='#e7c8a1';ctx.beginPath();ctx.arc(3,-2,p.r*.53,0,7);ctx.fill();ctx.fillStyle='#242c2b';ctx.fillRect(3,-4,p.r+13,7);if(isPlayer){ctx.strokeStyle='white';ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,p.r+4,0,7);ctx.stroke()}ctx.restore()}
+function loop(){update();draw();requestAnimationFrame(loop)}reset();loop();
+// joystick
+const stick=document.getElementById('stick'),nub=document.getElementById('nub');let active=null;
+function joy(e){const r=stick.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2;let dx=e.clientX-cx,dy=e.clientY-cy,l=Math.hypot(dx,dy),max=38;if(l>max){dx=dx/l*max;dy=dy/l*max}move={x:dx/max,y:dy/max};nub.style.left=(34+dx)+'px';nub.style.top=(34+dy)+'px';if(Math.hypot(move.x,move.y)>.2)player.angle=Math.atan2(move.y,move.x)}
+stick.addEventListener('pointerdown',e=>{active=e.pointerId;stick.setPointerCapture(active);joy(e)});stick.addEventListener('pointermove',e=>{if(active===e.pointerId)joy(e)});function endJoy(){active=null;move={x:0,y:0};nub.style.left='34px';nub.style.top='34px'}stick.addEventListener('pointerup',endJoy);stick.addEventListener('pointercancel',endJoy);
+function fire(){if(gameOver)return;let target=null,bd=Infinity;for(const b of bots){if(b.alive){let d=dist(player,b);if(d<bd){bd=d;target=b}}}if(target){player.angle=Math.atan2(target.y-player.y,target.x-player.x)}if(performance.now()-lastShot>230){shoot(player,player.angle,'player');lastShot=performance.now()}}
+const shootBtn=document.getElementById('shoot');shootBtn.addEventListener('pointerdown',e=>{e.preventDefault();fire();shootBtn.setPointerCapture(e.pointerId)});shootBtn.addEventListener('pointermove',e=>{if(e.buttons)fire()});
+document.getElementById('restart').addEventListener('click',reset);
+})();
+</script>
+</body></html>
